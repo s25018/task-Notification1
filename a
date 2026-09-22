@@ -1,0 +1,4 @@
+student-task-tracker/
+├── app.py                 # Streamlit 메인 실행 파일
+├── requirements.txt       # 필요 라이브러리 목록
+└── README.md              # 프로젝트 설명서
