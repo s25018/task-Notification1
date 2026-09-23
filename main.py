@@ -38,7 +38,7 @@ st.sidebar.title("👤 사용자 역할 선택")
 role = st.sidebar.radio("역할을 선택하세요", ["학생 화면", "교사 화면"])
 
 st.sidebar.markdown("---")
-st.sidebar.info("💡 교사 화면에서 수행평가를 등록하면 달력과 학생 화면에 실시간 반영됩니다.")
+st.sidebar.info("💡 교사 화면에서 수행평가를 등록/수정/삭제하면 달력과 학생 화면에 실시간 반영됩니다.")
 
 # 오늘 날짜
 today = datetime.date.today()
@@ -154,8 +154,13 @@ if role == "학생 화면":
 elif role == "교사 화면":
     st.title("👩‍🏫 교사용 수행평가 관리 시스템")
 
-    tab1, tab2, tab3 = st.tabs(
-        ["🗓️ 전체 달력 보기", "➕ 새 수행평가 등록", "📊 제출 및 진행도 관리"]
+    tab1, tab2, tab3, tab4 = st.tabs(
+        [
+            "🗓️ 전체 달력 보기",
+            "➕ 새 수행평가 등록",
+            "✏️ 수행평가 수정 및 삭제",
+            "📊 제출 및 진행도 관리",
+        ]
     )
 
     # TAB 1: 전체 달력 보기
@@ -217,8 +222,78 @@ elif role == "교사 화면":
                     )
                     st.rerun()
 
-    # TAB 3: 제출 및 진행도 관리
+    # TAB 3: 수행평가 수정 및 삭제 (신규 추가된 기능)
     with tab3:
+        st.subheader("등록된 수행평가 수정 및 삭제")
+
+        if not st.session_state.tasks:
+            st.info("수정 또는 삭제할 수행평가가 없습니다.")
+        else:
+            # 수정/삭제할 수행평가 선택
+            task_titles = [t["title"] for t in st.session_state.tasks]
+            selected_title = st.selectbox("수정/삭제할 수행평가를 선택하세요", task_titles)
+
+            # 선택한 task 인덱스 및 데이터 가져오기
+            task_idx = next(
+                i
+                for i, t in enumerate(st.session_state.tasks)
+                if t["title"] == selected_title
+            )
+            target_task = st.session_state.tasks[task_idx]
+
+            st.markdown("---")
+
+            col_edit, col_delete = st.columns([3, 1])
+
+            # 1. 수정 폼
+            with col_edit:
+                st.write(f"### ✏️ '{target_task['title']}' 정보 수정")
+                with st.form(key=f"edit_form_{target_task['id']}"):
+                    edit_title = st.text_input("수행평가 제목", value=target_task["title"])
+
+                    c1, c2, c3 = st.columns([2, 2, 1])
+                    with c1:
+                        edit_start = st.date_input("제출 시작일", value=target_task["start_date"])
+                    with c2:
+                        edit_due = st.date_input("마감일", value=target_task["due_date"])
+                    with c3:
+                        edit_color = st.color_picker(
+                            "달력 색상", value=target_task.get("color", "#3788d8")
+                        )
+
+                    edit_rubric = st.text_area("평가기준표", value=target_task["rubric"])
+                    edit_total = st.number_input(
+                        "전체 학생 수", min_value=1, value=target_task["total_students"]
+                    )
+
+                    update_btn = st.form_submit_button("수정 내용 저장하기")
+
+                    if update_btn:
+                        if not edit_title:
+                            st.error("제목을 입력해 주세요.")
+                        elif edit_start > edit_due:
+                            st.error("마감일은 시작일 이후여야 합니다.")
+                        else:
+                            st.session_state.tasks[task_idx]["title"] = edit_title
+                            st.session_state.tasks[task_idx]["start_date"] = edit_start
+                            st.session_state.tasks[task_idx]["due_date"] = edit_due
+                            st.session_state.tasks[task_idx]["rubric"] = edit_rubric
+                            st.session_state.tasks[task_idx]["total_students"] = edit_total
+                            st.session_state.tasks[task_idx]["color"] = edit_color
+                            st.success("수행평가 정보가 수정되었습니다!")
+                            st.rerun()
+
+            # 2. 삭제 영역
+            with col_delete:
+                st.write("### 🗑️ 수행평가 삭제")
+                st.warning("삭제하면 복구할 수 없습니다.")
+                if st.button("🔴 이 수행평가 삭제", key=f"del_btn_{target_task['id']}"):
+                    del st.session_state.tasks[task_idx]
+                    st.success(f"'{target_task['title']}' 수행평가가 삭제되었습니다.")
+                    st.rerun()
+
+    # TAB 4: 제출 및 진행도 관리
+    with tab4:
         st.subheader("학생 제출 현황 및 백분율 진행도")
 
         if not st.session_state.tasks:
