@@ -1,3 +1,4 @@
+import calendar
 import datetime
 import pandas as pd
 import streamlit as st
@@ -6,7 +7,6 @@ import streamlit as st
 st.set_page_config(
     page_title="수행평가 일정 관리 시스템", page_icon="📅", layout="wide"
 )
-
 
 # 초기 데이터 설정 (세션 상태 활용)
 if "tasks" not in st.session_state:
@@ -84,13 +84,10 @@ if role == "학생 화면":
             # D-day 문구 설정
             if days_left > 0:
                 d_day_str = f"D-{days_left} (제출일로부터 {days_left}일 남았습니다)"
-                status_color = "blue"
             elif days_left == 0:
                 d_day_str = "D-Day (오늘 마감!)"
-                status_color = "red"
             else:
                 d_day_str = f"마감됨 (D+{abs(days_left)})"
-                status_color = "grey"
 
             with st.expander(
                 f"📌 **{task['title']}** | 🔥 {d_day_str}", expanded=True
@@ -111,23 +108,91 @@ if role == "학생 화면":
                         f"제출인원: {task['submitted_students']}명 / 총 {task['total_students']}명"
                     )
 
-    # 간단 달력 보기 (Table/DataFrame 형태)
+    # 🗓️ 월별 인터랙티브 달력 뷰 구현
     st.markdown("---")
-    st.subheader("🗓️ 달력형 일정표")
-    calendar_data = []
-    for t in st.session_state.tasks:
-        calendar_data.append(
-            {
-                "수행평가명": t["title"],
-                "시작일": t["start_date"],
-                "마감일": t["due_date"],
-                "남은 기간": f"{(t['due_date'] - today).days}일",
-            }
+    st.subheader("🗓️ 월별 수행평가 달력")
+
+    # 연도 및 월 선택 (기본값: 오늘 연도/월 또는 등록된 일정 기준)
+    col_y, col_m = st.columns(2)
+    with col_y:
+        selected_year = st.selectbox(
+            "연도 선택", [2025, 2026, 2027], index=1
         )
-    if calendar_data:
-        st.dataframe(
-            pd.DataFrame(calendar_data), use_container_width=True, hide_index=True
-        )
+    with col_m:
+        selected_month = st.selectbox(
+            "월 선택", list(range(1, 13)), index=8
+        )  # 9월 기본 선택 (인덱스 8)
+
+    # 파이썬 calendar 모듈을 이용한 달력 생성
+import calendar
+
+cal = calendar.monthcalendar(selected_year, selected_month)
+days_name = ["월", "화", "수", "목", "금", "토", "일"]
+
+# 날짜별 수행평가 매핑 사전(Dict) 만들기
+task_map = {}
+for task in st.session_state.tasks:
+    # 시작일부터 마감일까지의 모든 날짜를 매핑
+    curr = task["start_date"]
+    end = task["due_date"]
+    while curr <= end:
+        if curr.year == selected_year and curr.month == selected_month:
+            if curr.day not in task_map:
+                task_map[curr.day] = []
+            # 마감일인지 시작일인지 표시
+            if curr == end:
+                task_map[curr.day].append(f"🔴 [마감] {task['title']}")
+            elif curr == curr == task["start_date"]:
+                task_map[curr.day].append(f"🟢 [시작] {task['title']}")
+            else:
+                task_map[curr.day].append(f"🔵 {task['title']}")
+        curr += datetime.timedelta(days=1)
+
+# Streamlit 컬럼으로 요일 헤더 표시
+header_cols = st.columns(7)
+for i, d_name in enumerate(days_name):
+    header_cols[i].markdown(
+        f"<p style='text-align: center; font-weight: bold;'>{d_name}</p>",
+        unsafe_allow_html=True,
+    )
+
+# 주별(Week) 날짜 그리드 표시
+for week in cal:
+    week_cols = st.columns(7)
+    for i, day in enumerate(week):
+        with week_cols[i]:
+            if day == 0:
+                st.markdown(
+                    "<div style='height: 90px; background-color: #f9f9f9; border-radius: 5px; padding: 5px; color: #ccc;'></div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                # 오늘 날짜 강조 디자인
+                is_today = (
+                    selected_year == today.year
+                    and selected_month == today.month
+                    and day == today.day
+                )
+                bg_color = "#e8f4fd" if is_today else "#ffffff"
+                border_style = (
+                    "border: 2px solid #1f77b4;"
+                    if is_today
+                    else "border: 1px solid #e0e0e0;"
+                )
+
+                content_html = f"<div style='height: 100px; {border_style} background-color: {bg_color}; border-radius: 5px; padding: 5px; overflow-y: auto; font-size: 11px;'>"
+                content_html += (
+                    f"<b>{day}</b>"
+                    + (" (오늘)" if is_today else "")
+                    + "<br>"
+                )
+
+                if day in task_map:
+                    for t_str in task_map[day]:
+                        content_html += f"<span style='display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{t_str}</span>"
+
+                content_html += "</div>"
+                st.markdown(content_html, unsafe_allow_html=True)
 
 
 # ==============================================================================
